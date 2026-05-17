@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Datasets (do not commit raw data)
+data/moore/*.arff
+
+# Outputs
+outputs/
+*.png
+*.jpg
+*.h5
+*.npy
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log
