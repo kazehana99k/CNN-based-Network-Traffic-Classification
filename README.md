@@ -28,7 +28,15 @@
 | 元論文 2D CNN (2022) | 99.58% | ~57% | TF-CPU baseline |
 | **Dilated 1D CNN (本リポジトリ)** | **98.83%** | **79.89%** | **PyTorch GPU + batch 128** |
 
-詳細グラフ: [`outputs/batch_sweep.png`](outputs/batch_sweep.png), [`outputs/per_class_accuracy.png`](outputs/per_class_accuracy.png)
+バッチサイズと ATTACK F1 の関係 (今回一番大きな発見):
+
+![batch sweep](docs/batch_sweep.png)
+
+クラス別の精度比較:
+
+![per-class accuracy](docs/per_class_accuracy.png)
+
+他のグラフ (アルゴリズム比較、混同行列、学習曲線): [docs/](docs/)
 
 ---
 

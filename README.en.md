@@ -28,7 +28,15 @@ The main result is that ATTACK class F1 improved from about 57% to 79.89%. The k
 | Original 2D CNN (2022 thesis) | 99.58% | ~57% | TF-CPU baseline |
 | **Dilated 1D CNN (this repo)** | **98.83%** | **79.89%** | **PyTorch GPU + batch 128** |
 
-Detailed plots: [`outputs/batch_sweep.png`](outputs/batch_sweep.png), [`outputs/per_class_accuracy.png`](outputs/per_class_accuracy.png)
+Batch size vs ATTACK F1 (the central finding of this work):
+
+![batch sweep](docs/batch_sweep.png)
+
+Per-class accuracy comparison:
+
+![per-class accuracy](docs/per_class_accuracy.png)
+
+Other figures (algorithm comparison, confusion matrices, training curves): [docs/](docs/)
 
 ---
 

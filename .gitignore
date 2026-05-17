@@ -9,12 +9,14 @@ venv/
 # Datasets (do not commit raw data)
 data/moore/*.arff
 
-# Outputs
+# Outputs (generated batch artifacts; do not commit)
 outputs/
-*.png
-*.jpg
 *.h5
 *.npy
+
+# Tracked image folder (whitelisted figures embedded in README/EXPERIMENTS)
+!docs/
+!docs/*.png
 
 # IDE
 .idea/
