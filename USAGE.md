@@ -1,52 +1,42 @@
-# 基于 CNN 的网络数据流量分类（论文复现）
+<p align="right">
+  <b>日本語</b> | <a href="USAGE.en.md">English</a>
+</p>
 
-本项目复现 王世元 的本科毕业论文《基于 CNN 的网络数据流量分类》（北京信息科技大学 2022）。论文使用 **Moore 数据集**，对比 **CNN、BP 神经网络、KNN、朴素贝叶斯、SVM、决策树** 共 6 种算法的网络流量分类效果。
+# 使い方
 
----
-
-## 目录结构
-
-```
-final/
-├── config.py            # 全局配置（路径、超参、12 个分类标签）
-├── data_preprocess.py   # Moore 数据集解析、均值填充、类别平衡
-├── models_dl.py         # CNN、BP 神经网络（TensorFlow/Keras）
-├── models_ml.py         # KNN、朴素贝叶斯、SVM、决策树（sklearn）
-├── utils_eval.py        # 混淆矩阵、训练曲线、各分类准确率柱状图
-├── main.py              # 主入口，整合 6 种算法的训练与对比
-├── requirements.txt     # Python 依赖
-├── data/moore/          # 放置 Moore 数据集（entry01~entry10.weka.allclass.arff）
-└── outputs/             # 训练产生的图表与 summary.json
-```
+このページでは、環境の準備からデータセットの取得、各スクリプトの動かし方までを順番に説明します。プロジェクト全体の話は [README.md](README.md) を見てください。
 
 ---
 
-## 1. 环境准备
+## 1. 環境を整える
 
-建议使用 Python 3.9（论文中使用 PyCharm + anaconda3，TensorFlow-CPU 2.8.0）。
+Python 3.10 以上を推奨します。
 
 ```bash
-# 创建虚拟环境（可选）
-python -m venv venv
-venv\Scripts\activate           # Windows
-# 或 source venv/bin/activate   # Linux/macOS
-
-# 安装依赖
 pip install -r requirements.txt
 ```
 
+PyTorch 版のスクリプト (`batch_sweep.py`、`attack_experiments.py` など) を GPU で動かしたい場合は、別途インストールしてください。CUDA 12.8 + RTX 5090 で動作確認しています。
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu128
+```
+
+GPU が使えるかは次のように確認できます。
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
 ---
 
-## 2. 数据集下载
+## 2. データセットの準備
 
-Moore 数据集即剑桥大学 Andrew Moore 等人公开的网络流量数据，共 10 个子集（`entry01.weka.allclass.arff` ~ `entry10.weka.allclass.arff`）。
+Moore データセット (A. Moore et al., Cambridge 大学, 2005 年) の 10 個の ARFF ファイルが必要です。
 
-**下载地址（任选其一）：**
+ダウンロード元: <https://www.cl.cam.ac.uk/research/srg/netos/projects/archive/nprobe/data/papers/sigmetrics/index.html>
 
-- 官方页面（剑桥大学）：<https://www.cl.cam.ac.uk/research/srg/netos/projects/archive/nprobe/data/papers/sigmetrics/index.html>
-- 学术镜像（Kaggle / GitHub 上有多份转储，搜索关键词 `Moore dataset network traffic arff` 即可）
-
-将解压后的 10 个 `.arff` 文件放入 `data/moore/`：
+`entry01.weka.allclass.arff.gz` から `entry10.weka.allclass.arff.gz` までを取ってきて、解凍したものを `data/moore/` に置いてください。
 
 ```
 data/moore/
@@ -56,91 +46,123 @@ data/moore/
 └── entry10.weka.allclass.arff
 ```
 
+`entry12.weka.allclass.arff` も同じディレクトリに置いておくと、`--external-test` オプションを使ったときに、訓練に使っていない別のサンプルでモデルを評価できます (任意)。
+
 ---
 
-## 3. 运行
+## 3. 各スクリプトの動かし方
+
+### 3.1 main.py — 6 アルゴリズムの比較 (元論文の再現)
 
 ```bash
-# 只运行 CNN（默认）
+# CNN だけを動かす
 python main.py --cnn
 
-# 同时运行 CNN 和 BP
+# CNN と BP 神経網
 python main.py --cnn --bp
 
-# 运行全部 6 种算法（与论文实验一致）
+# 6 つすべて (CNN + BP + KNN + Naive Bayes + SVM + Decision Tree)
 python main.py --all
 
-# 自定义 epochs / batch_size
+# epochs と batch_size を指定する
 python main.py --cnn --epochs 25 --batch-size 128
 
-# SVM 在大数据上极慢，可以指定子集大小（论文中 SVM 跑了 3159 秒）
+# SVM は大きいデータだと時間がかかるので、部分サンプルで動かす
 python main.py --svm --svm-subset 20000
+
+# entry12 を外部テスト用に使う
+python main.py --cnn --external-test entry12.weka.allclass.arff
 ```
 
-所有产出（混淆矩阵、训练曲线、综合对比图、`summary.json`）会保存到 `outputs/`。
+### 3.2 batch_sweep.py — バッチサイズの系統的な検証 (推奨の最終構成)
+
+```bash
+python batch_sweep.py --epochs 25 --batches 128 256 512 1024 2048
+```
+
+Dilated 1D CNN を、指定された各バッチサイズで学習させて、ATTACK F1 や全体の精度がどう変わるかを比較します。出力は `outputs/batch_sweep.json` と `outputs/batch_sweep.png` です。
+
+### 3.3 ablation.py — 1D CNN の各改善の効果を切り分ける
+
+```bash
+python ablation.py --epochs 25 --batch-size 128
+```
+
+baseline / k9 / reorder / attack-fe / dilated / all の 6 つの構成を比較します。
+
+### 3.4 attack_experiments.py — ATTACK クラスを上げるための試み
+
+```bash
+python attack_experiments.py --epochs 25 --batch-size 128 --enable-6
+```
+
+Weighted CE、Focal Loss、Two-Stage 分類器、ポート特徴を消す方法など、ATTACK F1 を上げるための 6 つの方法を試します。
+
+### 3.5 共通オプション
+
+| オプション | 説明 |
+|----------|------|
+| `--no-balance` | クラスバランス調整を無効にする |
+| `--no-normalize` | 特徴量の正規化を無効にする |
+| `--reorder` | 相関クラスタリングで特徴量を並べ替える |
+| `--attack-features` | ATTACK 向けの 6 つの派生特徴を追加する |
+| `--cnn1d-kernel N` | 1D CNN のカーネルサイズを変える (デフォルトは 5) |
+| `--external-test FILE` | 指定したファイルを外部テストセットとして使う |
 
 ---
 
-## 4. 与论文对应关系
+## 4. 出力ファイルの説明
 
-| 论文章节 | 实现位置 |
+スクリプトを動かすと `outputs/` の下に次のようなファイルが作られます。
+
+| ファイル | 内容 |
+|---------|------|
+| `summary.json` | main.py の結果 (各アルゴリズムの精度と所要時間) |
+| `ablation_summary.json` | ablation.py の結果 |
+| `attack_experiments.json` | attack_experiments.py の結果 |
+| `batch_sweep.json` | batch_sweep.py の結果 |
+| `*_confusion.png` | 各モデルの混同行列 |
+| `*_history.png` | CNN/BP の学習曲線 |
+| `overall_comparison.png` | 全アルゴリズムの精度・時間の比較バーチャート |
+| `per_class_accuracy.png` | クラスごとの精度比較 |
+| `batch_sweep.png` | バッチサイズと精度の関係を表す折れ線グラフ |
+
+README に載せている図は `docs/` にもコピーしてあります。
+
+---
+
+## 5. ソースコードと論文の対応
+
+| 論文の章節 | 実装場所 |
 | -------- | -------- |
-| 2.1 卷积神经网络 | `models_dl.py:build_cnn_model` |
-| 2.2.1 BP 神经网络 | `models_dl.py:build_bp_model` |
+| 2.1 CNN | `models_dl.py:build_cnn_model` |
+| 2.2.1 BP 神経網 | `models_dl.py:build_bp_model` |
 | 2.2.2 KNN | `models_ml.py:train_knn` |
-| 2.2.3 朴素贝叶斯 | `models_ml.py:train_naive_bayes` |
-| 2.2.4 决策树 | `models_ml.py:train_decision_tree` |
+| 2.2.3 Naive Bayes | `models_ml.py:train_naive_bayes` |
+| 2.2.4 Decision Tree | `models_ml.py:train_decision_tree` |
 | 2.2.5 SVM | `models_ml.py:train_svm` |
-| 3.1.2 类别平衡 (表 3.2) | `data_preprocess.py:balance_dataset` |
-| 3.1.3 均值填充算法 | `data_preprocess.py:balance_dataset`（高斯白噪声） |
-| 4.2 数据预处理 (图 4.2) | `data_preprocess.py:parse_arff_line` |
-| 4.3 CNN 搭建 (图 4.3) | `models_dl.py:build_cnn_model` |
-| 4.5 评价指标 (图 4.9) | `utils_eval.py:plot_confusion_matrix` |
-| 5.1 训练曲线 | `utils_eval.py:plot_training_history` |
-| 5.3 6 种算法对比 (图 5.10/5.11) | `utils_eval.py:plot_overall_comparison` |
+| 3.1.2 クラスバランス調整 (表 3.2) | `data_preprocess.py:balance_dataset` |
+| 3.1.3 平均値で埋める処理 | `data_preprocess.py:balance_dataset` |
+| 4.2 データ前処理 | `data_preprocess.py:parse_arff_line` |
+| 4.3 CNN の構築 | `models_dl.py:build_cnn_model` |
+| 4.5 評価指標 | `utils_eval.py:plot_confusion_matrix` |
+| 5.1 学習曲線 | `utils_eval.py:plot_training_history` |
+| 5.3 6 アルゴリズム比較 | `utils_eval.py:plot_overall_comparison` |
 
 ---
 
-## 5. CNN 网络结构（与论文图 4.3 一致）
+## 6. うまく動かないとき
 
-```
-Input(16×16×1)
- → Conv2D(8, 3×3, ReLU, same) → MaxPool(2×2)
- → Conv2D(16, 3×3, ReLU, same) → MaxPool(2×2)
- → Flatten
- → Dense(256, ReLU)
- → Dense(128, ReLU)
- → Dense(12, Softmax)
-```
-
-数据预处理时把每个样本的 248 个特征 + 8 个 0 填充凑成 256 维，再 reshape 为 16×16。
+1. **ARFF ファイルが見つからないとエラーが出る** — `data/moore/` の中に 10 個のファイルが揃っているかを確認してください。パスを変えたい場合は `config.py:DATA_DIR` をいじります。
+2. **SVM がいつまで経っても終わらない** — `--svm-subset 20000` のようにサンプル数を絞ってください。
+3. **TensorFlow のインストールでエラーになる** — Python 3.12 以上を使っている場合は、TF 2.16 以上が必要です (`requirements.txt` の指定どおり `tensorflow-cpu>=2.16` でインストールしてください)。
+4. **メモリ不足で落ちる** — `--batch-size` を小さくするか、`config.py:MOORE_FILES` で読み込むファイル数を減らしてください。
+5. **GPU が認識されない (PyTorch)** — `python -c "import torch; print(torch.cuda.is_available())"` で確認します。`False` の場合は CUDA とドライバのバージョンが合っていない可能性があるので、`pip install torch --index-url ...` で再インストールしてください。
 
 ---
 
-## 6. 论文实验结果（供参考）
+## 7. このリポジトリと元論文の関係
 
-| 算法 | 准确率 | 用时 (s) |
-| ---- | ------ | -------- |
-| CNN | 99.58 % | 214.95 |
-| BP  | 99.52 % | 37.7 |
-| KNN | 99.01 % | 313 |
-| SVM | 97.97 % | 3159 |
-| 决策树 | 99.37 % | 213 |
-| 朴素贝叶斯 | 53.87 % | 1.55 |
+これは王世元の学部卒業研究 (2022 年) を、4 年後に自分で見直して書き直したものです。当時の方針・特徴量の選び方・モデル構成は基本的にそのまま使いつつ、コードのバグ修正、1D CNN や Dilated Conv への発展、PyTorch + GPU 化、バッチサイズの系統的な検証などを足しました。
 
-实际结果会受到数据集子集、随机种子、CPU 性能等影响。
-
----
-
-## 7. 常见问题
-
-1. **找不到 arff 文件**：检查 `data/moore/` 下是否放好 10 个文件；或修改 `config.py:DATA_DIR`。
-2. **SVM 太慢**：用 `--svm-subset 20000` 或更小的值。
-3. **TensorFlow 版本兼容**：本项目用 `tensorflow-cpu==2.8.0`；如装 GPU 版本，将 `requirements.txt` 中相应行改成 `tensorflow==2.8.0` 即可。
-4. **报内存错误**：调小 `--batch-size`，或在 `data_preprocess.py:prepare_data` 中减少加载的 arff 文件数量。
-
----
-
-## 致谢
-
-本复现项目基于 王世元 同学的本科毕业论文进行重构。原作者使用的方案、特征选取、模型结构等创意均归原作者所有。
+それぞれの改善の動機・実装・結果については [EXPERIMENTS.md](EXPERIMENTS.md) を見てください。

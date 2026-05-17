@@ -47,19 +47,24 @@ def get_device():
 # ============== Model definitions ==============
 
 class CNN2D(nn.Module):
-    """2D CNN equivalent to the Keras version (16x16 input)."""
-    def __init__(self, num_classes=NUM_CLASSES):
+    """2D CNN, matches the original paper (Fig. 4.3) and Section 5.2's improved variant.
+
+    conv_filters=(8, 16) — original paper baseline
+    conv_filters=(16, 32) — paper's Section 5.2 improvement (claimed 99.67%)
+    """
+    def __init__(self, num_classes=NUM_CLASSES, conv_filters=(8, 16)):
         super().__init__()
+        c1, c2 = conv_filters
         self.features = nn.Sequential(
-            nn.Conv2d(1, 8, kernel_size=3, padding=1), nn.ReLU(inplace=True),
+            nn.Conv2d(1, c1, kernel_size=3, padding=1), nn.ReLU(inplace=True),
             nn.MaxPool2d(2, ceil_mode=True),
-            nn.Conv2d(8, 16, kernel_size=3, padding=1), nn.ReLU(inplace=True),
+            nn.Conv2d(c1, c2, kernel_size=3, padding=1), nn.ReLU(inplace=True),
             nn.MaxPool2d(2, ceil_mode=True),
         )
-        # After 2x2 -> 4x4, channels 16 -> flatten to 256
+        # After 2 MaxPool(2x2,ceil) on 16x16 -> 4x4
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(16 * 4 * 4, 256), nn.ReLU(inplace=True),
+            nn.Linear(c2 * 4 * 4, 256), nn.ReLU(inplace=True),
             nn.Linear(256, 128), nn.ReLU(inplace=True),
             nn.Linear(128, num_classes),
         )
@@ -232,14 +237,16 @@ def _train_loop(model, X_train, y_train, X_test, y_test,
     }
 
 
-def train_cnn(X_train, y_train, X_test, y_test, epochs=EPOCHS, batch_size=BATCH_SIZE, verbose=1):
+def train_cnn(X_train, y_train, X_test, y_test, epochs=EPOCHS, batch_size=BATCH_SIZE, verbose=1,
+              conv_filters=(8, 16), class_weights=None, use_focal=False):
     # X has shape (N, 256); reshape to (N, 1, 16, 16)
     X_tr = X_train.reshape(-1, 1, 16, 16)
     X_te = X_test.reshape(-1, 1, 16, 16)
-    model = CNN2D()
-    res = _train_loop(model, X_tr, y_train, X_te, y_test, epochs, batch_size, verbose=verbose)
-    print(f'[CNN-Torch] Test acc {res["accuracy"]:.4f}, time {res["time"]:.2f}s '
-          f'(device={get_device()})')
+    model = CNN2D(conv_filters=conv_filters)
+    res = _train_loop(model, X_tr, y_train, X_te, y_test, epochs, batch_size, verbose=verbose,
+                      class_weights=class_weights, use_focal=use_focal)
+    print(f'[CNN-Torch filters={conv_filters}] Test acc {res["accuracy"]:.4f}, '
+          f'time {res["time"]:.2f}s (device={get_device()})')
     return res
 
 
