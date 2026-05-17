@@ -4,23 +4,51 @@
 
 # CNN-based Network Traffic Classification
 
-Classifying network packets — Web, mail, attack traffic, and 9 other categories — using a CNN trained on packet-level statistical features (count, size, timing, TCP flags).
+A system that looks at network traffic flowing on the Internet and automatically tells whether each flow is normal Web browsing, email, file transfer, or a cyber attack — using deep learning (CNN).
 
 ---
 
-## Overview
+## What this project does
 
-Even without inspecting payload content, the *traffic pattern alone* (packet counts, size distribution, timing, TCP flags) carries enough signal to guess what application produced it. This project builds a CNN that takes **248 statistical features** as input and predicts which of **12 application classes** each flow belongs to.
+Every second, vast numbers of network packets flow across the Internet. Some come from someone watching YouTube, some from people sending email, and some from external attackers. Being able to tell these apart quickly and accurately is what powers firewalls and intrusion detection systems.
 
-The repository is organized in two stages:
+In this project:
 
-1. **Reproduction of my 2022 undergraduate thesis**
-   A six-algorithm comparison (CNN, BP NN, KNN, Naive Bayes, SVM, Decision Tree) implemented in TensorFlow. During reproduction I also caught and fixed a label-preprocessing bug — a blanket string replacement was clobbering the letter `N` inside the class labels `FTP-CONTROL` and `INTERACTIVE`, causing those two classes to vanish entirely.
+- Without ever inspecting the actual content of the traffic (such as encrypted HTTPS payloads),
+- using only 248 surface-level statistics — "how many packets per second," "average packet size," "how often a particular TCP flag was set," and so on,
+- the model classifies each flow into one of 12 categories (Web, mail, file transfer, database, attack traffic, etc.).
 
-2. **A 4-year-later self-review and extension**
-   Migration to PyTorch + GPU, validation of the hypothesis that 1D CNNs are structurally better suited to tabular features than 2D, addition of Dilated Conv, and a systematic study of imbalanced-class countermeasures (Focal Loss, two-stage classifiers, derived features, and a batch-size sweep).
+Because the model never inspects payload, it works even when traffic is encrypted or when payload inspection would violate user privacy.
 
-The main result: after fairly re-evaluating the paper's Section 5.2 improved variant (filters 16/32 + batch 64) under the same pipeline, the proposed method lifts ATTACK F1 from 81.32% to **82.64%** and ATTACK Precision from 95.64% to **99.35%**. The most interesting finding along the way was this: none of the "obvious" tricks — Focal Loss, two-stage classification, oversampling — beat the plain baseline. What did help was dropping the batch size from 2048 to 128, a mundane hyperparameter change that dominated every fancy technique I tried. The lesson, 4 years after writing the original code: measure your baseline's true ceiling before reaching for complex methods.
+---
+
+## Two stages of this repository
+
+1. **Reproduction of my 2022 undergraduate thesis, four years later**
+   I reread the original TensorFlow implementation and rebuilt the six-algorithm comparison (CNN, BP NN, KNN, Naive Bayes, SVM, Decision Tree). In the process, I caught and fixed a preprocessing bug from the original code: a blanket string-replacement was clobbering the letter `N` inside the class labels `FTP-CONTROL` and `INTERACTIVE`, causing every sample of those two classes to silently drop out of the training set.
+
+2. **An extended, improved version**
+   Starting from a migration to PyTorch + GPU, I tested the hypothesis that "treating tabular features as a 16×16 image is structurally unnatural for a 2D CNN," and went through more than a dozen configurations: 1D CNN, Dilated convolutions, Focal Loss, two-stage classifiers, derived port features, and a systematic batch-size sweep.
+
+---
+
+## Main results
+
+After fairly re-evaluating the paper's Section 5.2 improved variant (filters 16/32, batch 64) on the same pipeline, the proposed method improves on it across the board:
+
+- **Overall accuracy**: 99.08% → **99.12%**
+- **ATTACK F1 score**: 81.32% → **82.64%**
+- **ATTACK Precision (low false-positive rate)**: 95.64% → **99.35%**
+
+The 99.35% Precision figure is particularly meaningful: it means the model almost never mistakes legitimate traffic for an attack, which in security products often matters more than F1 itself.
+
+---
+
+## The most interesting finding
+
+I tried many of the "obvious" tricks — Focal Loss, two-stage classifiers, synthetic oversampling — and none of them meaningfully beat the plain baseline. The single change that helped most was **dropping the mini-batch size from 2048 to 128 — one line of code**.
+
+The lesson, four years after writing the original code: measure your baseline's true ceiling before reaching for clever methods.
 
 ---
 
