@@ -4,29 +4,37 @@
 
 # CNN-based Network Traffic Classification
 
-A CNN that tells whether a network flow is Web browsing, email, file transfer, a cyber attack, or one of nine other categories — using only surface-level statistics, without inspecting payload content.
-
-![class-wise accuracy](docs/per_class_accuracy.png)
+This project builds a CNN that automatically classifies network traffic into 12 categories — Web browsing, email, file transfer, cyber attacks, and so on. Crucially, the model never looks at the payload content (such as the encrypted body of an HTTPS request). It works only from surface-level statistics: "how many packets per second," "average packet size," "how often a specific TCP flag was set," and so on.
 
 ## Why I built this
 
-From home routers to enterprise firewalls, networking equipment has relied on **port numbers** to classify traffic for decades. SMTP is port 25, HTTPS is 443, and so on. But this approach has been quietly breaking down for years.
+From home routers to enterprise firewalls, networking equipment has classified traffic by **port number** for decades. SMTP is port 25, HTTPS is 443, and so on. But this approach has quietly stopped working in the modern Internet:
 
-- P2P apps, VoIP and games dynamically switch ports, so fixed rules can't track them.
-- Attackers deliberately use legitimate ports (80, 443) to sneak past the same rules.
-- Now that HTTPS is everywhere, Deep Packet Inspection (DPI) only works in a few narrow cases.
+- P2P apps, VoIP, and online games dynamically switch ports, so fixed rules can't track them.
+- Attackers deliberately use legitimate ports (80, 443) to slip past the same rules.
+- Now that HTTPS is everywhere, Deep Packet Inspection (DPI) only works in a narrow set of cases.
 
-In short, port-and-rule-based classification has hit the limits of both effectiveness and security. This project explores an alternative: using only 248 surface-level statistics — "packets per second," "average packet size," "TCP flag frequency," and similar — to let a machine learning model figure out what kind of traffic each flow is. Because the model never looks at payload, it keeps working even when the traffic is encrypted, and respects user privacy by design.
+In short, port-and-rule traffic classification has hit the limits of both effectiveness and security. This project explores the alternative: letting a machine-learning model recognize traffic *by its behavior* — its statistical fingerprint — without ever inspecting payload. Because no payload is inspected, the system continues to work even when traffic is encrypted, and respects user privacy by design.
 
-## How this repository is organized
+## What I did
 
-The repo has two stages.
+The work breaks into four stages.
 
-**Stage 1 — Reproducing my 2022 undergraduate thesis**
-I rebuilt the original TensorFlow implementation of a six-algorithm comparison (CNN, BP NN, KNN, Naive Bayes, SVM, Decision Tree) while rereading my own code from four years ago. Along the way I caught a preprocessing bug in the original: a blanket string-replacement was clobbering the letter `N` inside the class labels `FTP-CONTROL` and `INTERACTIVE`, silently erasing every sample of those two classes from the training set.
+### 1. Reproducing the 2022 undergraduate thesis on a modern stack
 
-**Stage 2 — Building an improved version**
-Starting from a migration to PyTorch + GPU, I tested the hypothesis that "treating tabular features as a 16×16 pseudo-image with a 2D CNN is structurally unnatural" and worked through more than a dozen configurations: 1D CNN, Dilated convolutions, Focal Loss, two-stage classifiers, derived port-aware features, and a systematic batch-size sweep.
+I ported the original TensorFlow + Keras implementation to Python 3.12 / TF 2.21 and re-ran the six-algorithm comparison (CNN, BP NN, KNN, Naive Bayes, SVM, Decision Tree). In the process, I discovered a preprocessing bug from the original code: a blanket string-replacement was clobbering the letter `N` inside the class names `FTP-CONTROL` and `INTERACTIVE`, silently erasing every sample of those two classes from the training set. The project began with hunting down and fixing a quiet bug that my younger self had overlooked.
+
+### 2. Questioning the "table as pseudo-image" design
+
+The original paper reshapes 248 statistical features into a 16×16 pseudo-image and feeds it to a 2D CNN. The problem is that those 248 columns are semantically independent statistics, so the "up/down/left/right" neighbors a 2D convolution sees are essentially coincidence. Switching to a 1D CNN — which respects the linear feature order — improved accuracy, with the largest gains (+3 to +4 points) on the rarer classes such as FTP-PASV and INTERACTIVE_.
+
+### 3. Stretching the receptive field with Dilated 1D CNN
+
+A vanilla Conv1D kernel only sees ~5 cells. Replacing it with a stack of dilated convolutions extended the effective receptive field to ~15 cells. The first attempt — using Global Average Pooling at the head — backfired, washing out the signal and dropping accuracy to 82%. Replacing GAP with Max Pooling restored 99%-level accuracy, and this final configuration ended up beating every variant from the original paper.
+
+### 4. A systematic study of the ATTACK class
+
+The ATTACK class represents only ~1% of the data and was the unresolved difficulty in the original thesis. I tried over a dozen approaches: Focal Loss, two-stage classifiers, SMOTE-style synthetic samples, port-aware derived features, and a systematic batch-size sweep. What ended up winning was the single-line change of dropping the mini-batch size from 2048 to 128. All the clever techniques underperformed plain Cross-Entropy at the right batch size.
 
 ## Results
 
@@ -38,11 +46,15 @@ For a fair comparison, both the paper's configurations and the proposed method a
 | Paper Section 5.2 improved (filters 16/32) | 64 | 99.08% | 95.64% | 81.32% | 76.6s |
 | **Proposed: Dilated 1D CNN** | 64 | **99.12%** | **99.35%** | **82.64%** | 89.0s |
 
-The proposed method beats the paper's best configuration on every metric. The 99.35% ATTACK Precision is particularly meaningful: it means the model almost never mistakes legitimate traffic for an attack — and in real security products, that "low false-positive rate" matters more than F1 itself.
+The proposed method beats the paper's best configuration on every metric.
+
+![ATTACK class metric comparison](docs/attack_comparison.png)
+
+The ATTACK Precision of 99.35% in particular is meaningful in practice: it means the model almost never mistakes legitimate traffic for an attack, and in real security products that low false-positive rate often matters more than F1 itself.
 
 ![batch size vs attack F1](docs/batch_sweep.png)
 
-The chart above shows how attack-detection F1 changes with batch size. The fact that it improves monotonically as batch shrinks was the most surprising finding of this study. None of the clever techniques I tried — Focal Loss, two-stage classification, oversampling — could budge the F1 score; but dropping the batch size from 2048 to 128, a single line of code, did. A textbook lesson, learned from my own four-year-old code.
+The chart above shows how attack-detection F1 changes with batch size. The monotonic improvement as batch shrinks was the most surprising finding in this study. None of the "obvious" tricks — Focal Loss, two-stage classification, oversampling — could budge the F1 score. But dropping the batch size from 2048 to 128, a single line of code, did. A textbook lesson, learned the hard way from my own four-year-old code.
 
 ## Quick start
 
