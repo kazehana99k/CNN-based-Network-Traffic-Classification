@@ -16,13 +16,30 @@ From home routers to enterprise firewalls, networking equipment has classified t
 
 In short, port-and-rule traffic classification has hit the limits of both effectiveness and security. This project explores the alternative: letting a machine-learning model recognize traffic *by its behavior* — its statistical fingerprint — without ever inspecting payload. Because no payload is inspected, the system continues to work even when traffic is encrypted, and respects user privacy by design.
 
+## The starting point: my own undergraduate thesis from 2022
+
+This repository builds on my own undergraduate thesis, written at **Beijing Information Science and Technology University in 2022** ("CNN-based Network Traffic Classification" by Wang Shiyuan). The original work was:
+
+- **Dataset**: The publicly available **Moore Dataset** from the University of Cambridge — roughly 250,000 labeled flows across 12 classes.
+- **Inputs**: 248 statistical features extracted from each network flow.
+- **Methods compared**: a **2D CNN** (with the 248 features reshaped to a 16×16 grid), plus BP neural network, KNN, Naive Bayes, SVM, and Decision Tree — six approaches in total.
+- **Main finding**: the CNN achieved the highest overall accuracy (99.58%) and a reasonable trade-off between accuracy and runtime.
+- **Unresolved difficulty**: the **ATTACK class accuracy plateaued at ~70%**, with the thesis explicitly noting that "attack traffic disguises itself via legitimate ports, so a fundamental redesign of the feature space would be required to overcome this."
+
+Four years later, when I reread my own code, two questions came to mind:
+
+1. Were the original conclusions actually correct? Was there a structural problem in the design that I had missed at the time?
+2. With today's frameworks (PyTorch + GPU) and techniques that have matured since (1D CNNs for tabular data, Dilated convolutions, Focal Loss, etc.), could I push past the ATTACK ceiling that the 2022 me had given up on?
+
+This repository is the record of that re-examination and extension.
+
 ## What I did
 
 The work breaks into four stages.
 
-### 1. Reproducing the 2022 undergraduate thesis on a modern stack
+### 1. Getting my four-year-old code to run on a modern stack
 
-I ported the original TensorFlow + Keras implementation to Python 3.12 / TF 2.21 and re-ran the six-algorithm comparison (CNN, BP NN, KNN, Naive Bayes, SVM, Decision Tree). In the process, I discovered a preprocessing bug from the original code: a blanket string-replacement was clobbering the letter `N` inside the class names `FTP-CONTROL` and `INTERACTIVE`, silently erasing every sample of those two classes from the training set. The project began with hunting down and fixing a quiet bug that my younger self had overlooked.
+I ported the original TensorFlow + Keras + Python 3.9 implementation to Python 3.12 / TF 2.21 and re-ran the six-algorithm comparison. In the process, I discovered a preprocessing bug that my younger self had introduced: a blanket string-replacement was clobbering the letter `N` inside the class names `FTP-CONTROL` and `INTERACTIVE`, silently erasing every sample of those two classes from the training set. The project literally began by hunting down a quiet bug that I had written four years earlier.
 
 ### 2. Questioning the "table as pseudo-image" design
 
